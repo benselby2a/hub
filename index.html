@@ -315,6 +315,14 @@
         flex: 1;
         border: none;
         width: 100%;
+        overscroll-behavior-x: none;
+      }
+
+      /* Prevent iOS swipe-back from navigating the iframe */
+      .app-view.active {
+        display: flex;
+        touch-action: pan-y;
+        overscroll-behavior-x: none;
       }
 
       .loading {
@@ -331,6 +339,14 @@
         gap: 0.5rem;
         justify-content: center;
         margin-top: 2rem;
+        padding-bottom: 0.5rem;
+      }
+
+      .hub-version {
+        text-align: center;
+        font-size: 0.5rem;
+        color: var(--text-muted);
+        opacity: 0.5;
         padding-bottom: 2rem;
       }
 
@@ -484,6 +500,7 @@
         <button class="hub-tool-btn" id="btn-sql-backup">⬇ Download SQL Backup</button>
         <button class="hub-tool-btn" id="btn-audit-log">📋 Recent Activity</button>
       </div>
+      <div class="hub-version">v2026-06-07.1</div>
     </div>
 
     <div class="audit-overlay hidden" id="audit-overlay">
@@ -660,15 +677,18 @@
         logPageView(app.name);
       }
 
-      function closeApp() {
+      function closeApp(fromPopstate) {
         els.appView.classList.remove('active');
         els.hub.classList.add('active');
         els.topBar.classList.add('active');
         els.appFrame.src = '';
-        history.pushState({}, '', location.pathname);
+        // If triggered by back button click, update URL; popstate already did it
+        if (!fromPopstate) {
+          history.pushState({}, '', location.pathname);
+        }
       }
 
-      els.backBtn.addEventListener('click', closeApp);
+      els.backBtn.addEventListener('click', () => closeApp(false));
 
       els.refreshBtn.addEventListener('click', () => {
         const currentSrc = els.appFrame.src;
@@ -681,7 +701,14 @@
 
       window.addEventListener('popstate', () => {
         if (els.appView.classList.contains('active')) {
-          closeApp();
+          closeApp(true);
+        }
+      });
+
+      // Fallback: if iOS swipe-back blanks the iframe, close back to hub
+      window.addEventListener('pageshow', () => {
+        if (els.appView.classList.contains('active') && !els.appFrame.src) {
+          closeApp(false);
         }
       });
 
