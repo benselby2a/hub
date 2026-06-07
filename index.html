@@ -820,27 +820,22 @@
 
           for (const entry of DB_TABLES) {
             const client = sbForSchema(entry.schema);
-            // Try created_at first, fall back to updated_at
-            const { data, error } = await client
-              .from(entry.table)
-              .select('*')
-              .order('created_at', { ascending: false })
-              .limit(10);
+            let data = null;
 
-            if (error) {
-              // Table might not have created_at — try without ordering
-              const { data: d2 } = await client.from(entry.table).select('*').limit(5);
-              if (d2) {
-                d2.forEach(r => rows.push({
-                  schema: entry.schema,
-                  table: entry.table,
-                  app: entry.app,
-                  ts: r.updated_at || r.created_at || r.date || null,
-                  user: r.user_id || r.created_by || null,
-                  summary: r.name || r.title || r.location || r.email || r.id || '',
-                }));
-              }
-              continue;
+            // Try ordering by different timestamp columns
+            for (const col of ['created_at', 'updated_at', 'date', 'start_date', 'holiday_date', 'payment_date']) {
+              const res = await client
+                .from(entry.table)
+                .select('*')
+                .order(col, { ascending: false })
+                .limit(10);
+              if (!res.error) { data = res.data; break; }
+            }
+
+            // Last resort — no ordering
+            if (!data) {
+              const res = await client.from(entry.table).select('*').limit(10);
+              data = res.data;
             }
 
             if (data) {
@@ -848,7 +843,7 @@
                 schema: entry.schema,
                 table: entry.table,
                 app: entry.app,
-                ts: r.updated_at || r.created_at || r.date || null,
+                ts: r.updated_at || r.created_at || r.date || r.start_date || r.holiday_date || r.payment_date || null,
                 user: r.user_id || r.created_by || null,
                 summary: r.name || r.title || r.location || r.email || r.id || '',
               }));
@@ -869,12 +864,30 @@
             return;
           }
 
-          let html = '<table class="audit-table"><thead><tr><th>Time</th><th>App / Table</th><th>Detail</th></tr></thead><tbody>';
+          // Build user lookup from current session + any household_members data
+          const userMap = {};
+          if (auditSession?.user) {
+            userMap[auditSession.user.id] = auditSession.user.email;
+          }
+          // Try to resolve other users from household_members or owners
+          for (const r of rows) {
+            if (r.user && r.summary && r.summary.includes('@') && !userMap[r.user]) {
+              userMap[r.user] = r.summary;
+            }
+          }
+          function resolveUser(uid) {
+            if (!uid) return '';
+            if (userMap[uid]) return userMap[uid];
+            return String(uid).slice(0, 8) + '…';
+          }
+
+          let html = '<table class="audit-table"><thead><tr><th>Time</th><th>App / Table</th><th>User</th><th>Detail</th></tr></thead><tbody>';
           for (const r of top) {
             const time = r.ts ? new Date(r.ts).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
             const tbl = `<span class="schema-tag">${r.app}</span> ${r.table}`;
+            const user = resolveUser(r.user);
             const detail = String(r.summary).slice(0, 40);
-            html += `<tr><td>${time}</td><td>${tbl}</td><td>${detail}</td></tr>`;
+            html += `<tr><td>${time}</td><td>${tbl}</td><td>${user}</td><td>${detail}</td></tr>`;
           }
           html += '</tbody></table>';
           auditScroll.innerHTML = html;
