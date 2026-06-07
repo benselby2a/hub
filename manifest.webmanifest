@@ -1,5 +1,5 @@
 {
-  "name": "Manatee Hub",
+  "name": "Hub",
   "short_name": "Hub",
   "start_url": "./index.html",
   "scope": "./",

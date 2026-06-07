@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🐳🏠 Manatee Hub</title>
+    <title>🐳 Hub</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icons/icon.svg" />
@@ -452,7 +452,7 @@
     <div class="loading" id="loading">Loading...</div>
 
     <div class="auth-view" id="auth-view" style="display:none">
-      <h1 style="margin-bottom:1.5rem">🐳 Manatee Hub</h1>
+      <h1 style="margin-bottom:1.5rem">🐳 Hub</h1>
       <div class="auth-card">
         <h2>Sign In</h2>
         <form id="auth-form">
@@ -467,7 +467,7 @@
     </div>
 
     <div class="hub" id="hub">
-      <h1 class="hub-title">🐳 Manatee Hub</h1>
+      <h1 class="hub-title">🐳 Hub</h1>
       <div class="grid" id="grid"></div>
       <div class="hub-tools">
         <button class="hub-tool-btn" id="btn-sql-backup">⬇ Download SQL Backup</button>
@@ -675,15 +675,15 @@
 
       // ── Database table map ────────────────────
       const DB_TABLES = [
-        // Savings (public schema)
-        { schema: 'public', table: 'accounts', app: 'Savings' },
-        { schema: 'public', table: 'snapshots', app: 'Savings' },
-        { schema: 'public', table: 'owners', app: 'Savings' },
-        // Shopping List (public schema)
-        { schema: 'public', table: 'shopping_items', app: 'Shopping List' },
-        { schema: 'public', table: 'suggestion_items', app: 'Shopping List' },
-        { schema: 'public', table: 'meals', app: 'Shopping List' },
-        { schema: 'public', table: 'meal_items', app: 'Shopping List' },
+        // Savings
+        { schema: 'savings', table: 'accounts', app: 'Savings' },
+        { schema: 'savings', table: 'snapshots', app: 'Savings' },
+        { schema: 'savings', table: 'owners', app: 'Savings' },
+        // Shopping List
+        { schema: 'shopping_list', table: 'shopping_items', app: 'Shopping List' },
+        { schema: 'shopping_list', table: 'suggestion_items', app: 'Shopping List' },
+        { schema: 'shopping_list', table: 'meals', app: 'Shopping List' },
+        { schema: 'shopping_list', table: 'meal_items', app: 'Shopping List' },
         // Holiday Calendar
         { schema: 'holidaycalendar', table: 'people', app: 'Holiday Planner' },
         { schema: 'holidaycalendar', table: 'people_allowance', app: 'Holiday Planner' },
@@ -723,7 +723,7 @@
 
         try {
           const lines = [];
-          lines.push('-- Manatee Hub SQL Backup');
+          lines.push('-- Hub SQL Backup');
           lines.push('-- Generated: ' + new Date().toISOString());
           lines.push('-- User: ' + (currentUser?.email || 'unknown'));
           lines.push('');
