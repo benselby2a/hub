@@ -646,6 +646,7 @@
         els.appFrame.src = app.url;
         els.appFrame.onload = () => sendThemeToFrame();
         history.pushState({ app: app.name }, '', `#${app.name.toLowerCase().replace(/\s+/g, '-')}`);
+        logPageView(app.name);
       }
 
       function closeApp() {
@@ -700,12 +701,42 @@
         { schema: 'finance_app', table: 'recurring_template_contributions', app: 'Finances' },
         { schema: 'finance_app', table: 'recurring_template_splits', app: 'Finances' },
         { schema: 'finance_app', table: 'recurring_generation_log', app: 'Finances' },
+        // Hub
+        { schema: 'public', table: 'page_views', app: 'Hub' },
       ];
+
+      const APP_COLORS = {
+        'Savings':          { bg: 'rgba(76,175,80,0.12)',  border: 'rgba(76,175,80,0.3)' },
+        'Finances':         { bg: 'rgba(156,39,176,0.12)', border: 'rgba(156,39,176,0.3)' },
+        'Shopping List':    { bg: 'rgba(33,150,243,0.12)', border: 'rgba(33,150,243,0.3)' },
+        'Holiday Planner':  { bg: 'rgba(255,152,0,0.12)',  border: 'rgba(255,152,0,0.3)' },
+        'Hub':              { bg: 'rgba(100,100,140,0.12)', border: 'rgba(100,100,140,0.3)' },
+      };
 
       function sbForSchema(schema) {
         if (schema === 'public') return sb;
         return sb.schema(schema);
       }
+
+      // ── Page view tracking ────────────────────
+      async function logPageView(appName) {
+        try {
+          const { data: { session } } = await sb.auth.getSession();
+          if (!session) return;
+          await sb.from('page_views').insert({
+            app_name: appName,
+            user_id: session.user.id,
+            user_email: session.user.email,
+            viewed_at: new Date().toISOString(),
+          });
+        } catch (e) {
+          // Silently fail — table might not exist yet
+        }
+      }
+      // Log hub page view on load
+      sb.auth.getSession().then(({ data: { session } }) => {
+        if (session) logPageView('Hub');
+      });
 
       // ── SQL Backup ────────────────────────────
       function escSql(val) {
@@ -823,7 +854,7 @@
             let data = null;
 
             // Try ordering by different timestamp columns
-            for (const col of ['created_at', 'updated_at', 'date', 'start_date', 'holiday_date', 'payment_date']) {
+            for (const col of ['viewed_at', 'created_at', 'updated_at', 'date', 'start_date', 'holiday_date', 'payment_date']) {
               const res = await client
                 .from(entry.table)
                 .select('*')
@@ -843,9 +874,9 @@
                 schema: entry.schema,
                 table: entry.table,
                 app: entry.app,
-                ts: r.updated_at || r.created_at || r.date || r.start_date || r.holiday_date || r.payment_date || null,
-                user: r.user_id || r.created_by || null,
-                summary: r.name || r.title || r.location || r.email || r.id || '',
+                ts: r.viewed_at || r.updated_at || r.created_at || r.date || r.start_date || r.holiday_date || r.payment_date || null,
+                user: r.user_id || r.created_by || r.user_email || null,
+                summary: r.app_name ? `Opened ${r.app_name}` : (r.name || r.title || r.location || r.email || r.id || ''),
               }));
             }
           }
@@ -881,13 +912,28 @@
             return String(uid).slice(0, 8) + '…';
           }
 
+          // Group rows from the same app within 60 seconds
+          function isGrouped(a, b) {
+            if (!a || !b || a.app !== b.app) return false;
+            if (!a.ts || !b.ts) return false;
+            return Math.abs(new Date(a.ts) - new Date(b.ts)) <= 60000;
+          }
+
           let html = '<table class="audit-table"><thead><tr><th>Time</th><th>App / Table</th><th>User</th><th>Detail</th></tr></thead><tbody>';
-          for (const r of top) {
+          for (let i = 0; i < top.length; i++) {
+            const r = top[i];
+            const prev = i > 0 ? top[i - 1] : null;
+            const next = i < top.length - 1 ? top[i + 1] : null;
+            const inGroup = isGrouped(r, prev) || isGrouped(r, next);
+            const colors = APP_COLORS[r.app] || { bg: 'transparent', border: 'transparent' };
+            const style = inGroup
+              ? `background:${colors.bg};border-left:3px solid ${colors.border}`
+              : '';
             const time = r.ts ? new Date(r.ts).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
             const tbl = `<span class="schema-tag">${r.app}</span> ${r.table}`;
             const user = resolveUser(r.user);
             const detail = String(r.summary).slice(0, 40);
-            html += `<tr><td>${time}</td><td>${tbl}</td><td>${user}</td><td>${detail}</td></tr>`;
+            html += `<tr style="${style}"><td>${time}</td><td>${tbl}</td><td>${user}</td><td>${detail}</td></tr>`;
           }
           html += '</tbody></table>';
           auditScroll.innerHTML = html;
