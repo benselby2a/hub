@@ -358,6 +358,7 @@
         <button class="back-btn" id="back-btn">&#8592; Hub</button>
         <span class="app-bar-title" id="app-bar-title"></span>
         <button class="refresh-btn" id="refresh-btn" aria-label="Force refresh app">&#x21bb;</button>
+        <button class="theme-toggle" id="app-theme-toggle" aria-label="Toggle theme">🌙</button>
       </div>
       <iframe class="app-frame" id="app-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-storage-access-by-user-activation"></iframe>
     </div>
@@ -393,6 +394,7 @@
         backBtn:    document.getElementById('back-btn'),
         refreshBtn: document.getElementById('refresh-btn'),
         toggle:     document.getElementById('theme-toggle'),
+        appToggle:  document.getElementById('app-theme-toggle'),
       };
 
       // ── Theme ──────────────────────────────────
@@ -400,7 +402,19 @@
       if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
       updateToggleIcon();
 
-      els.toggle.addEventListener('click', () => {
+      els.toggle.addEventListener('click', toggleTheme);
+
+      function getTheme() {
+        return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+      }
+
+      function updateToggleIcon() {
+        const icon = getTheme() === 'light' ? '☀️' : '🌙';
+        els.toggle.textContent = icon;
+        if (els.appToggle) els.appToggle.textContent = icon;
+      }
+
+      function toggleTheme() {
         const current = document.documentElement.getAttribute('data-theme');
         const next = current === 'light' ? 'dark' : 'light';
         if (next === 'dark') document.documentElement.removeAttribute('data-theme');
@@ -408,15 +422,9 @@
         localStorage.setItem('hub-theme', next);
         updateToggleIcon();
         sendThemeToFrame();
-      });
-
-      function getTheme() {
-        return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
       }
 
-      function updateToggleIcon() {
-        els.toggle.textContent = getTheme() === 'light' ? '☀️' : '🌙';
-      }
+      if (els.appToggle) els.appToggle.addEventListener('click', toggleTheme);
 
       function sendThemeToFrame() {
         if (els.appFrame.contentWindow) {
@@ -498,8 +506,8 @@
 
       function openApp(app) {
         els.hub.classList.remove('active');
+        els.topBar.classList.remove('active');
         els.appView.classList.add('active');
-        els.topBar.classList.add('active');
         els.appTitle.textContent = '';
         els.appFrame.src = app.url;
         els.appFrame.onload = () => sendThemeToFrame();
@@ -509,6 +517,7 @@
       function closeApp() {
         els.appView.classList.remove('active');
         els.hub.classList.add('active');
+        els.topBar.classList.add('active');
         els.appFrame.src = '';
         history.pushState({}, '', location.pathname);
       }
