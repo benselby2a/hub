@@ -7,6 +7,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icons/icon.svg" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -23,6 +24,10 @@
         --btn-text: #c0c0e0;
         --btn-hover: #1e1e3e;
         --toggle-bg: #1e1e3e;
+        --bg-input: #14142a;
+        --bg-card: #14142a;
+        --accent: #4a9eff;
+        --error: #ef5350;
       }
 
       [data-theme="light"] {
@@ -38,6 +43,10 @@
         --btn-text: #3a3a50;
         --btn-hover: #e4e4ee;
         --toggle-bg: #e0e0ea;
+        --bg-input: #f5f5f8;
+        --bg-card: #ffffff;
+        --accent: #2a7ae0;
+        --error: #d32f2f;
       }
 
       body {
@@ -47,11 +56,115 @@
         min-height: 100dvh;
       }
 
-      /* ── Theme toggle ────────────────────────── */
-      .theme-toggle {
+      /* ── Auth view ───────────────────────────── */
+      .auth-view {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100dvh;
+        padding: 2rem 1rem;
+      }
+
+      .auth-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-tile);
+        border-radius: 16px;
+        padding: 2rem;
+        width: 100%;
+        max-width: 360px;
+      }
+
+      .auth-card h2 {
+        text-align: center;
+        margin-bottom: 1.25rem;
+      }
+
+      .auth-card label {
+        display: block;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-bottom: 0.25rem;
+        margin-top: 0.75rem;
+      }
+
+      .auth-card input {
+        width: 100%;
+        padding: 0.5rem 0.6rem;
+        border-radius: 6px;
+        border: 1px solid var(--border-tile);
+        background: var(--bg-input);
+        color: var(--text);
+        font-size: 0.9rem;
+      }
+
+      .auth-card input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+
+      .auth-card button[type="submit"] {
+        width: 100%;
+        margin-top: 1rem;
+        padding: 0.55rem;
+        border: none;
+        border-radius: 6px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .auth-card button[type="submit"]:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .auth-error {
+        color: var(--error);
+        font-size: 0.8rem;
+        margin-top: 0.5rem;
+        text-align: center;
+      }
+
+      /* ── Top bar ────────────────────────────── */
+      .top-bar {
         position: fixed;
-        top: 6px;
-        right: 0.75rem;
+        top: 0;
+        right: 0;
+        display: none;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 6px 0.75rem;
+        z-index: 100;
+      }
+
+      .top-bar.active {
+        display: flex;
+      }
+
+      .top-bar-user {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+
+      .sign-out-btn {
+        background: none;
+        border: 1px solid var(--btn-border);
+        border-radius: 6px;
+        color: var(--btn-text);
+        font-size: 0.7rem;
+        padding: 0.15rem 0.4rem;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+
+      .sign-out-btn:hover {
+        background: var(--btn-hover);
+      }
+
+      .theme-toggle {
         background: var(--toggle-bg);
         border: 1px solid var(--border-tile);
         border-radius: 6px;
@@ -66,7 +179,6 @@
         align-items: center;
         justify-content: center;
         transition: background 0.15s;
-        z-index: 100;
       }
 
       .theme-toggle:hover {
@@ -75,12 +187,16 @@
 
       /* ── Hub view ─────────────────────────────── */
       .hub {
-        display: flex;
+        display: none;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         min-height: 100dvh;
         padding: 2rem 1rem;
+      }
+
+      .hub.active {
+        display: flex;
       }
 
       .hub-title {
@@ -180,11 +296,40 @@
         border: none;
         width: 100%;
       }
+
+      .loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100dvh;
+        color: var(--text-muted);
+      }
     </style>
   </head>
   <body>
 
-    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">🌙</button>
+    <div class="top-bar" id="top-bar">
+      <span class="top-bar-user" id="top-bar-user"></span>
+      <button class="sign-out-btn" id="sign-out-btn">Sign Out</button>
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">🌙</button>
+    </div>
+
+    <div class="loading" id="loading">Loading...</div>
+
+    <div class="auth-view" id="auth-view" style="display:none">
+      <h1 style="margin-bottom:1.5rem">🐳 Manatee Hub</h1>
+      <div class="auth-card">
+        <h2>Sign In</h2>
+        <form id="auth-form">
+          <label for="auth-email">Email</label>
+          <input id="auth-email" type="email" placeholder="you@example.com" required />
+          <label for="auth-password">Password</label>
+          <input id="auth-password" type="password" placeholder="Password" required minlength="6" />
+          <div class="auth-error" id="auth-error"></div>
+          <button type="submit" id="auth-submit">Sign In</button>
+        </form>
+      </div>
+    </div>
 
     <div class="hub" id="hub">
       <h1 class="hub-title">🐳 Manatee Hub</h1>
@@ -196,10 +341,14 @@
         <button class="back-btn" id="back-btn">&#8592; Hub</button>
         <span class="app-bar-title" id="app-bar-title"></span>
       </div>
-      <iframe class="app-frame" id="app-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"></iframe>
+      <iframe class="app-frame" id="app-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-storage-access-by-user-activation"></iframe>
     </div>
 
     <script>
+      const SUPABASE_URL = 'https://cnkznpkvwoqxaiywwmhr.supabase.co';
+      const SUPABASE_ANON_KEY = 'sb_publishable_xlNQ_QudJNUlMLjWpr0iJA_YgO87tox';
+      const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
       const apps = [
         { name: 'Savings',          icon: './icons/savings.svg',         url: 'https://benselby2a.github.io/savings/' },
         { name: 'Finances',         icon: './icons/finances.svg',        url: 'https://benselby2a.github.io/finances/' },
@@ -207,26 +356,36 @@
         { name: 'Holiday Planner',  icon: './icons/holidaycalendar.svg', url: 'https://benselby2a.github.io/holidaycalendar/' },
       ];
 
-      const grid     = document.getElementById('grid');
-      const hub      = document.getElementById('hub');
-      const appView  = document.getElementById('app-view');
-      const appFrame = document.getElementById('app-frame');
-      const appTitle = document.getElementById('app-bar-title');
-      const backBtn  = document.getElementById('back-btn');
-      const toggle   = document.getElementById('theme-toggle');
+      const els = {
+        loading:    document.getElementById('loading'),
+        authView:   document.getElementById('auth-view'),
+        authForm:   document.getElementById('auth-form'),
+        authEmail:  document.getElementById('auth-email'),
+        authPass:   document.getElementById('auth-password'),
+        authError:  document.getElementById('auth-error'),
+        authSubmit: document.getElementById('auth-submit'),
+        hub:        document.getElementById('hub'),
+        topBar:     document.getElementById('top-bar'),
+        topBarUser: document.getElementById('top-bar-user'),
+        signOutBtn: document.getElementById('sign-out-btn'),
+        grid:       document.getElementById('grid'),
+        appView:    document.getElementById('app-view'),
+        appFrame:   document.getElementById('app-frame'),
+        appTitle:   document.getElementById('app-bar-title'),
+        backBtn:    document.getElementById('back-btn'),
+        toggle:     document.getElementById('theme-toggle'),
+      };
 
-      // Theme
-      const saved = localStorage.getItem('hub-theme');
-      if (saved) {
-        document.documentElement.setAttribute('data-theme', saved);
-      }
+      // ── Theme ──────────────────────────────────
+      const savedTheme = localStorage.getItem('hub-theme');
+      if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
       updateToggleIcon();
 
-      toggle.addEventListener('click', () => {
+      els.toggle.addEventListener('click', () => {
         const current = document.documentElement.getAttribute('data-theme');
         const next = current === 'light' ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', next === 'dark' ? '' : next);
         if (next === 'dark') document.documentElement.removeAttribute('data-theme');
+        else document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem('hub-theme', next);
         updateToggleIcon();
         sendThemeToFrame();
@@ -237,16 +396,76 @@
       }
 
       function updateToggleIcon() {
-        toggle.textContent = getTheme() === 'light' ? '☀️' : '🌙';
+        els.toggle.textContent = getTheme() === 'light' ? '☀️' : '🌙';
       }
 
       function sendThemeToFrame() {
-        if (appFrame.contentWindow) {
-          appFrame.contentWindow.postMessage({ type: 'theme', value: getTheme() }, '*');
+        if (els.appFrame.contentWindow) {
+          els.appFrame.contentWindow.postMessage({ type: 'theme', value: getTheme() }, '*');
         }
       }
 
-      // Tiles
+      // ── Views ──────────────────────────────────
+      function showView(view, userEmail) {
+        els.loading.style.display = 'none';
+        els.authView.style.display = 'none';
+        els.hub.classList.remove('active');
+        els.appView.classList.remove('active');
+        els.topBar.classList.remove('active');
+
+        if (view === 'auth') {
+          els.authView.style.display = '';
+        } else if (view === 'hub') {
+          els.hub.classList.add('active');
+          els.topBar.classList.add('active');
+          els.topBarUser.textContent = userEmail || '';
+        }
+      }
+
+      // ── Auth ───────────────────────────────────
+      let currentUser = null;
+
+      els.authForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        els.authError.textContent = '';
+        els.authSubmit.disabled = true;
+        els.authSubmit.textContent = 'Signing in...';
+
+        const { error } = await sb.auth.signInWithPassword({
+          email: els.authEmail.value,
+          password: els.authPass.value,
+        });
+
+        els.authSubmit.disabled = false;
+        els.authSubmit.textContent = 'Sign In';
+
+        if (error) {
+          els.authError.textContent = error.message;
+        }
+      });
+
+      els.signOutBtn.addEventListener('click', () => sb.auth.signOut());
+
+      sb.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          currentUser = session.user;
+          showView('hub', session.user.email);
+        } else {
+          showView('auth');
+        }
+      });
+
+      sb.auth.onAuthStateChange((_event, session) => {
+        if (session) {
+          currentUser = session.user;
+          showView('hub', session.user.email);
+        } else {
+          currentUser = null;
+          showView('auth');
+        }
+      });
+
+      // ── Tiles ──────────────────────────────────
       apps.forEach(app => {
         const tile = document.createElement('a');
         tile.className = 'tile';
@@ -256,29 +475,30 @@
           e.preventDefault();
           openApp(app);
         });
-        grid.appendChild(tile);
+        els.grid.appendChild(tile);
       });
 
       function openApp(app) {
-        hub.style.display = 'none';
-        appView.classList.add('active');
-        appTitle.textContent = app.name;
-        appFrame.src = app.url;
-        appFrame.onload = () => sendThemeToFrame();
+        els.hub.classList.remove('active');
+        els.appView.classList.add('active');
+        els.topBar.classList.add('active');
+        els.appTitle.textContent = app.name;
+        els.appFrame.src = app.url;
+        els.appFrame.onload = () => sendThemeToFrame();
         history.pushState({ app: app.name }, '', `#${app.name.toLowerCase().replace(/\s+/g, '-')}`);
       }
 
       function closeApp() {
-        appView.classList.remove('active');
-        hub.style.display = '';
-        appFrame.src = '';
+        els.appView.classList.remove('active');
+        els.hub.classList.add('active');
+        els.appFrame.src = '';
         history.pushState({}, '', location.pathname);
       }
 
-      backBtn.addEventListener('click', closeApp);
+      els.backBtn.addEventListener('click', closeApp);
 
       window.addEventListener('popstate', () => {
-        if (appView.classList.contains('active')) {
+        if (els.appView.classList.contains('active')) {
           closeApp();
         }
       });
