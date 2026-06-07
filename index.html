@@ -455,7 +455,9 @@
       sb.auth.onAuthStateChange((_event, session) => {
         if (session) {
           currentUser = session.user;
-          showView('hub', session.user.email);
+          if (!els.appView.classList.contains('active')) {
+            showView('hub', session.user.email);
+          }
         } else {
           currentUser = null;
           showView('auth');
@@ -464,14 +466,11 @@
 
       // ── Tiles ──────────────────────────────────
       apps.forEach(app => {
-        const tile = document.createElement('a');
+        const tile = document.createElement('button');
         tile.className = 'tile';
-        tile.href = '#';
+        tile.type = 'button';
         tile.innerHTML = `<img src="${app.icon}" alt="${app.name}"><span>${app.name}</span>`;
-        tile.addEventListener('click', e => {
-          e.preventDefault();
-          openApp(app);
-        });
+        tile.addEventListener('click', () => openApp(app));
         els.grid.appendChild(tile);
       });
 
