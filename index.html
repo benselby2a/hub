@@ -145,8 +145,12 @@
       }
 
       .top-bar-user {
-        font-size: 0.75rem;
+        font-size: 0.6rem;
         color: var(--text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 140px;
       }
 
       .sign-out-btn {
@@ -478,7 +482,7 @@
         els.hub.classList.remove('active');
         els.appView.classList.add('active');
         els.topBar.classList.add('active');
-        els.appTitle.textContent = app.name;
+        els.appTitle.textContent = '';
         els.appFrame.src = app.url;
         els.appFrame.onload = () => sendThemeToFrame();
         history.pushState({ app: app.name }, '', `#${app.name.toLowerCase().replace(/\s+/g, '-')}`);
