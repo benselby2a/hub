@@ -432,6 +432,17 @@
         color: var(--text);
       }
 
+      .audit-day-header td {
+        font-weight: 700;
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 0.6rem 0.5rem 0.3rem;
+        border-bottom: 1px solid var(--border-tile);
+        background: var(--bg-body);
+      }
+
       .audit-table .schema-tag {
         font-size: 0.6rem;
         color: var(--text-muted);
@@ -713,9 +724,34 @@
         'Hub':              { bg: 'rgba(100,100,140,0.12)', border: 'rgba(100,100,140,0.3)' },
       };
 
-      function sbForSchema(schema) {
-        if (schema === 'public') return sb;
-        return sb.schema(schema);
+      function sbQuery(schema, table) {
+        if (schema === 'public') return sb.from(table);
+        return sb.schema(schema).from(table);
+      }
+
+      // Direct REST for cross-schema queries
+      let cachedToken = null;
+      async function getAuthToken() {
+        if (cachedToken) return cachedToken;
+        const { data: { session } } = await sb.auth.getSession();
+        cachedToken = session?.access_token || SUPABASE_ANON_KEY;
+        return cachedToken;
+      }
+
+      async function restQuery(schema, table, { order, limit = 10, token } = {}) {
+        const authToken = token || await getAuthToken();
+        let url = `${SUPABASE_URL}/rest/v1/${table}?select=*&limit=${limit}`;
+        if (order) url += `&order=${order}.desc`;
+        const res = await fetch(url, {
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${authToken}`,
+            'Accept-Profile': schema,
+          }
+        });
+        if (!res.ok) return { data: null, error: { message: `${res.status} ${res.statusText}` } };
+        const data = await res.json();
+        return { data, error: null };
       }
 
       // ── Page view tracking ────────────────────
@@ -760,8 +796,7 @@
           lines.push('');
 
           for (const entry of DB_TABLES) {
-            const client = sbForSchema(entry.schema);
-            const { data, error } = await client.from(entry.table).select('*');
+            const { data, error } = await restQuery(entry.schema, entry.table, { limit: 10000 });
             if (error) {
               lines.push(`-- ERROR reading ${entry.schema}.${entry.table}: ${error.message}`);
               lines.push('');
@@ -849,37 +884,47 @@
             }
           }
 
-          for (const entry of DB_TABLES) {
-            const client = sbForSchema(entry.schema);
-            let data = null;
+          // Get token once for all queries
+          const authToken = auditSession?.access_token || SUPABASE_ANON_KEY;
 
-            // Try ordering by different timestamp columns
-            for (const col of ['viewed_at', 'created_at', 'updated_at', 'date', 'start_date', 'holiday_date', 'payment_date']) {
-              const res = await client
-                .from(entry.table)
-                .select('*')
-                .order(col, { ascending: false })
-                .limit(10);
-              if (!res.error) { data = res.data; break; }
-            }
+          const tablePromises = DB_TABLES.map(async (entry) => {
+            try {
+              let data = null;
 
-            // Last resort — no ordering
-            if (!data) {
-              const res = await client.from(entry.table).select('*').limit(10);
-              data = res.data;
-            }
+              // Try ordering by different timestamp columns
+              for (const col of ['viewed_at', 'updated_at', 'created_at', 'payment_date', 'start_date', 'holiday_date', 'date']) {
+                const res = await restQuery(entry.schema, entry.table, { order: col, limit: 10, token: authToken });
+                if (!res.error) { data = res.data; break; }
+              }
 
-            if (data) {
-              data.forEach(r => rows.push({
-                schema: entry.schema,
-                table: entry.table,
-                app: entry.app,
-                ts: r.viewed_at || r.updated_at || r.created_at || r.date || r.start_date || r.holiday_date || r.payment_date || null,
-                user: r.user_id || r.created_by || r.user_email || null,
-                summary: r.app_name ? `Opened ${r.app_name}` : (r.name || r.title || r.location || r.email || r.id || ''),
-              }));
+              // Last resort — no ordering
+              if (!data) {
+                const res = await restQuery(entry.schema, entry.table, { limit: 10, token: authToken });
+                if (res.error) {
+                  console.warn(`[Audit] ${entry.schema}.${entry.table}: ${res.error.message}`);
+                  return;
+                }
+                data = res.data;
+              }
+
+              if (entry.schema === 'savings') console.log(`[Audit-debug] ${entry.schema}.${entry.table}:`, JSON.stringify(data?.slice(0,2)));
+
+              if (data) {
+                data.forEach(r => rows.push({
+                  schema: entry.schema,
+                  table: entry.table,
+                  app: entry.app,
+                  ts: r.viewed_at || r.updated_at || r.created_at || r.payment_date || r.start_date || r.holiday_date || r.date || null,
+                  user: r.user_id || r.created_by || r.user_email || null,
+                  summary: r.app_name ? `Opened ${r.app_name}` : (r.name || r.title || r.location || r.email || r.id || ''),
+                }));
+              }
+            } catch (err) {
+              console.warn(`[Audit] ${entry.schema}.${entry.table} failed:`, err.message);
             }
-          }
+          });
+          await Promise.all(tablePromises);
+
 
           // Sort by timestamp descending, take 50
           rows.sort((a, b) => {
@@ -900,7 +945,6 @@
           if (auditSession?.user) {
             userMap[auditSession.user.id] = auditSession.user.email;
           }
-          // Try to resolve other users from household_members or owners
           for (const r of rows) {
             if (r.user && r.summary && r.summary.includes('@') && !userMap[r.user]) {
               userMap[r.user] = r.summary;
@@ -919,9 +963,26 @@
             return Math.abs(new Date(a.ts) - new Date(b.ts)) <= 60000;
           }
 
-          let html = '<table class="audit-table"><thead><tr><th>Time</th><th>App / Table</th><th>User</th><th>Detail</th></tr></thead><tbody>';
+          // Day header helper
+          function dayLabel(ts) {
+            if (!ts) return 'Unknown date';
+            const d = new Date(ts);
+            const today = new Date();
+            const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+            if (d.toDateString() === today.toDateString()) return 'Today';
+            if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+            return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+          }
+
+          let html = '<table class="audit-table"><tbody>';
+          let lastDay = null;
           for (let i = 0; i < top.length; i++) {
             const r = top[i];
+            const day = dayLabel(r.ts);
+            if (day !== lastDay) {
+              html += `<tr class="audit-day-header"><td colspan="4">${day}</td></tr>`;
+              lastDay = day;
+            }
             const prev = i > 0 ? top[i - 1] : null;
             const next = i < top.length - 1 ? top[i + 1] : null;
             const inGroup = isGrouped(r, prev) || isGrouped(r, next);
@@ -929,7 +990,7 @@
             const style = inGroup
               ? `background:${colors.bg};border-left:3px solid ${colors.border}`
               : '';
-            const time = r.ts ? new Date(r.ts).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
+            const time = r.ts ? new Date(r.ts).toLocaleString('en-GB', { hour:'2-digit', minute:'2-digit' }) : '—';
             const tbl = `<span class="schema-tag">${r.app}</span> ${r.table}`;
             const user = resolveUser(r.user);
             const detail = String(r.summary).slice(0, 40);
