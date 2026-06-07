@@ -290,6 +290,22 @@
       .app-bar-title {
         font-size: 0.85rem;
         color: var(--text-muted);
+        flex: 1;
+      }
+
+      .refresh-btn {
+        background: none;
+        border: 1px solid var(--btn-border);
+        border-radius: 6px;
+        color: var(--btn-text);
+        font-size: 1rem;
+        padding: 0.15rem 0.5rem;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+
+      .refresh-btn:hover {
+        background: var(--btn-hover);
       }
 
       .app-frame {
@@ -341,6 +357,7 @@
       <div class="app-bar">
         <button class="back-btn" id="back-btn">&#8592; Hub</button>
         <span class="app-bar-title" id="app-bar-title"></span>
+        <button class="refresh-btn" id="refresh-btn" aria-label="Force refresh app">&#x21bb;</button>
       </div>
       <iframe class="app-frame" id="app-frame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-storage-access-by-user-activation"></iframe>
     </div>
@@ -374,6 +391,7 @@
         appFrame:   document.getElementById('app-frame'),
         appTitle:   document.getElementById('app-bar-title'),
         backBtn:    document.getElementById('back-btn'),
+        refreshBtn: document.getElementById('refresh-btn'),
         toggle:     document.getElementById('theme-toggle'),
       };
 
@@ -496,6 +514,15 @@
       }
 
       els.backBtn.addEventListener('click', closeApp);
+
+      els.refreshBtn.addEventListener('click', () => {
+        const currentSrc = els.appFrame.src;
+        if (!currentSrc) return;
+        const url = new URL(currentSrc);
+        url.searchParams.set('_bust', Date.now());
+        els.appFrame.src = url.toString();
+        els.appFrame.onload = () => sendThemeToFrame();
+      });
 
       window.addEventListener('popstate', () => {
         if (els.appView.classList.contains('active')) {
