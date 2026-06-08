@@ -429,24 +429,21 @@
         width: 100%;
         border-collapse: collapse;
         font-size: 0.7rem;
-      }
-
-      .audit-table th {
-        text-align: left;
-        padding: 0.4rem 0.5rem;
-        border-bottom: 1px solid var(--border-tile);
-        color: var(--text-muted);
-        font-weight: 600;
-        position: sticky;
-        top: 0;
-        background: var(--bg-tile);
+        table-layout: fixed;
       }
 
       .audit-table td {
-        padding: 0.35rem 0.5rem;
+        padding: 0.3rem 0.4rem;
         border-bottom: 1px solid var(--border-tile);
         color: var(--text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
+
+      .audit-table .col-time { width: 3rem; color: var(--text-muted); }
+      .audit-table .col-app { width: auto; }
+      .audit-table .col-detail { width: 40%; color: var(--text-muted); font-size: 0.6rem; }
 
       .audit-day-header td {
         font-weight: 700;
@@ -454,17 +451,26 @@
         color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        padding: 0.6rem 0.5rem 0.3rem;
+        padding: 0.5rem 0.4rem 0.25rem;
         border-bottom: 1px solid var(--border-tile);
         background: var(--bg-body);
+        white-space: normal;
       }
 
       .audit-table .schema-tag {
-        font-size: 0.6rem;
+        font-size: 0.55rem;
         color: var(--text-muted);
         background: var(--toggle-bg);
         border-radius: 3px;
-        padding: 0.1rem 0.3rem;
+        padding: 0.1rem 0.25rem;
+      }
+
+      .audit-table .table-name {
+        font-size: 0.6rem;
+        display: block;
+        color: var(--text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
     </style>
   </head>
@@ -500,7 +506,7 @@
         <button class="hub-tool-btn" id="btn-sql-backup">⬇ Download SQL Backup</button>
         <button class="hub-tool-btn" id="btn-audit-log">📋 Recent Activity</button>
       </div>
-      <div class="hub-version">v2026-06-07.1</div>
+      <div class="hub-version">v2026-06-08.1</div>
     </div>
 
     <div class="audit-overlay hidden" id="audit-overlay">
@@ -666,6 +672,24 @@
         els.grid.appendChild(tile);
       });
 
+      // ── Blank-iframe detection (iOS swipe-back fallback) ──
+      let blankCheckInterval = null;
+      function startBlankCheck() {
+        stopBlankCheck();
+        blankCheckInterval = setInterval(() => {
+          if (!els.appView.classList.contains('active')) { stopBlankCheck(); return; }
+          try {
+            const src = els.appFrame.src;
+            if (!src || src === 'about:blank' || src === '') {
+              closeApp(false);
+            }
+          } catch (e) { /* cross-origin — iframe still has content */ }
+        }, 500);
+      }
+      function stopBlankCheck() {
+        if (blankCheckInterval) { clearInterval(blankCheckInterval); blankCheckInterval = null; }
+      }
+
       function openApp(app) {
         els.hub.classList.remove('active');
         els.topBar.classList.remove('active');
@@ -675,6 +699,7 @@
         els.appFrame.onload = () => sendThemeToFrame();
         history.pushState({ app: app.name }, '', `#${app.name.toLowerCase().replace(/\s+/g, '-')}`);
         logPageView(app.name);
+        startBlankCheck();
       }
 
       function closeApp(fromPopstate) {
@@ -682,6 +707,7 @@
         els.hub.classList.add('active');
         els.topBar.classList.add('active');
         els.appFrame.src = '';
+        stopBlankCheck();
         // If triggered by back button click, update URL; popstate already did it
         if (!fromPopstate) {
           history.pushState({}, '', location.pathname);
@@ -705,10 +731,18 @@
         }
       });
 
-      // Fallback: if iOS swipe-back blanks the iframe, close back to hub
+      // Fallback: detect when iOS swipe-back blanks the iframe
+      // The iframe can capture the gesture and navigate its own history to about:blank
       window.addEventListener('pageshow', () => {
         if (els.appView.classList.contains('active') && !els.appFrame.src) {
           closeApp(false);
+        }
+      });
+
+      // Also handle hash-based navigation as backup
+      window.addEventListener('hashchange', () => {
+        if (!location.hash && els.appView.classList.contains('active')) {
+          closeApp(true);
         }
       });
 
@@ -1007,7 +1041,7 @@
             const r = top[i];
             const day = dayLabel(r.ts);
             if (day !== lastDay) {
-              html += `<tr class="audit-day-header"><td colspan="4">${day}</td></tr>`;
+              html += `<tr class="audit-day-header"><td colspan="3">${day}</td></tr>`;
               lastDay = day;
             }
             const prev = i > 0 ? top[i - 1] : null;
@@ -1018,10 +1052,8 @@
               ? `background:${colors.bg};border-left:3px solid ${colors.border}`
               : '';
             const time = r.ts ? new Date(r.ts).toLocaleString('en-GB', { hour:'2-digit', minute:'2-digit' }) : '—';
-            const tbl = `<span class="schema-tag">${r.app}</span> ${r.table}`;
-            const user = resolveUser(r.user);
-            const detail = String(r.summary).slice(0, 40);
-            html += `<tr style="${style}"><td>${time}</td><td>${tbl}</td><td>${user}</td><td>${detail}</td></tr>`;
+            const detail = String(r.summary).slice(0, 30);
+            html += `<tr style="${style}"><td class="col-time">${time}</td><td class="col-app"><span class="schema-tag">${r.app}</span> <span class="table-name">${r.table}</span></td><td class="col-detail">${detail}</td></tr>`;
           }
           html += '</tbody></table>';
           auditScroll.innerHTML = html;
