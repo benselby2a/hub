@@ -472,6 +472,14 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
+
+      .audit-table .audit-user {
+        font-size: 0.55rem;
+        color: var(--accent);
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
     </style>
   </head>
   <body>
@@ -1053,7 +1061,9 @@
               : '';
             const time = r.ts ? new Date(r.ts).toLocaleString('en-GB', { hour:'2-digit', minute:'2-digit' }) : '—';
             const detail = String(r.summary).slice(0, 30);
-            html += `<tr style="${style}"><td class="col-time">${time}</td><td class="col-app"><span class="schema-tag">${r.app}</span> <span class="table-name">${r.table}</span></td><td class="col-detail">${detail}</td></tr>`;
+            const user = resolveUser(r.user);
+            const userHtml = user ? `<span class="audit-user">${user.split('@')[0]}</span>` : '';
+            html += `<tr style="${style}"><td class="col-time">${time}</td><td class="col-app"><span class="schema-tag">${r.app}</span> <span class="table-name">${r.table}</span>${userHtml}</td><td class="col-detail">${detail}</td></tr>`;
           }
           html += '</tbody></table>';
           auditScroll.innerHTML = html;
