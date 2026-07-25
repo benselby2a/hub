@@ -486,6 +486,7 @@
 
     <div class="top-bar" id="top-bar">
       <span class="top-bar-user" id="top-bar-user"></span>
+      <button class="refresh-btn" id="hub-refresh-btn" aria-label="Refresh Hub" title="Refresh Hub">&#x21bb;</button>
       <button class="sign-out-btn" id="sign-out-btn">Sign Out</button>
       <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">🌙</button>
     </div>
@@ -514,7 +515,7 @@
         <button class="hub-tool-btn" id="btn-sql-backup">⬇ Download SQL Backup</button>
         <button class="hub-tool-btn" id="btn-audit-log">📋 Recent Activity</button>
       </div>
-      <div class="hub-version">v2026-07-25.2</div>
+      <div class="hub-version" id="hub-version"></div>
     </div>
 
     <div class="audit-overlay hidden" id="audit-overlay">
@@ -544,6 +545,24 @@
       const SUPABASE_ANON_KEY = 'sb_publishable_xlNQ_QudJNUlMLjWpr0iJA_YgO87tox';
       const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+      // Single source of truth for the version stamp shown in the hub and
+      // used to detect a newer deploy — bump this on every release.
+      const HUB_VERSION = 'v2026-07-25.3';
+
+      // A hard refresh appends `_bust` to force past any HTTP cache; strip it
+      // back out once the fresh page has loaded so the address bar stays clean.
+      if (location.search.includes('_bust')) {
+        const cleanUrl = new URL(location.href);
+        cleanUrl.searchParams.delete('_bust');
+        history.replaceState({}, '', cleanUrl.pathname + cleanUrl.hash);
+      }
+
+      function hardReload() {
+        const url = new URL(location.href);
+        url.searchParams.set('_bust', Date.now());
+        location.href = url.toString();
+      }
+
       const apps = [
         { name: 'Savings',          icon: './icons/savings.svg',         url: 'https://benselby2a.github.io/savings/' },
         { name: 'Finances',         icon: './icons/finances.svg',        url: 'https://benselby2a.github.io/finances/' },
@@ -571,9 +590,14 @@
         appTitle:   document.getElementById('app-bar-title'),
         backBtn:    document.getElementById('back-btn'),
         refreshBtn: document.getElementById('refresh-btn'),
+        hubRefreshBtn: document.getElementById('hub-refresh-btn'),
+        hubVersion: document.getElementById('hub-version'),
         toggle:     document.getElementById('theme-toggle'),
         appToggle:  document.getElementById('app-theme-toggle'),
       };
+
+      els.hubVersion.textContent = HUB_VERSION;
+      els.hubRefreshBtn.addEventListener('click', hardReload);
 
       // ── Theme ──────────────────────────────────
       const savedTheme = localStorage.getItem('hub-theme');
@@ -734,6 +758,35 @@
         els.appFrame.src = url.toString();
         els.appFrame.onload = () => sendThemeToFrame();
       });
+
+      // ── Auto-update check ─────────────────────
+      // Installed/standalone PWAs have no browser reload button and can sit on
+      // a stale cached copy for days. Check the deployed version whenever the
+      // hub becomes visible (the common "reopen the app" moment) and whenever
+      // it's left open for a while, then hard-reload — but only while the hub
+      // grid itself is showing, since that view has no unsaved state to lose.
+      async function deployedVersion() {
+        try {
+          const res = await fetch('./index.html', { cache: 'no-store' });
+          if (!res.ok) return null;
+          const html = await res.text();
+          const m = html.match(/const HUB_VERSION = '([^']+)'/);
+          return m ? m[1] : null;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      async function checkForUpdate() {
+        if (!els.hub.classList.contains('active')) return;
+        const latest = await deployedVersion();
+        if (latest && latest !== HUB_VERSION) hardReload();
+      }
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') checkForUpdate();
+      });
+      setInterval(checkForUpdate, 10 * 60 * 1000);
 
       window.addEventListener('popstate', () => {
         if (els.appView.classList.contains('active')) {
