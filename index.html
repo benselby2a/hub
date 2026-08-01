@@ -547,7 +547,7 @@
 
       // Single source of truth for the version stamp shown in the hub and
       // used to detect a newer deploy — bump this on every release.
-      const HUB_VERSION = 'v2026-07-25.3';
+      const HUB_VERSION = 'v2026-07-25.4';
 
       // A hard refresh appends `_bust` to force past any HTTP cache; strip it
       // back out once the fresh page has loaded so the address bar stays clean.
@@ -1045,6 +1045,7 @@
                   app: entry.app,
                   ts: r.viewed_at || r.updated_at || r.created_at || r.payment_date || r.start_date || r.holiday_date || r.date || null,
                   user: r.user_id || r.updated_by || r.created_by || r.user_email || null,
+                  email: r.user_email || null,
                   summary: r.app_name ? `Opened ${r.app_name}` : (r.name || r.title || r.location || r.email || r.id || ''),
                 }));
               }
@@ -1069,10 +1070,15 @@
             return;
           }
 
-          // Build user lookup from current session + any household_members data
+          // Build user lookup from current session + any rows carrying an email
           const userMap = {};
           if (auditSession?.user) {
             userMap[auditSession.user.id] = auditSession.user.email;
+          }
+          for (const r of rows) {
+            if (r.user && r.email && !userMap[r.user]) {
+              userMap[r.user] = r.email;
+            }
           }
           for (const r of rows) {
             if (r.user && r.summary && r.summary.includes('@') && !userMap[r.user]) {
