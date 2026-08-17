@@ -825,6 +825,14 @@
         { schema: 'holidaycalendar', table: 'people_allowance', app: 'Holiday Planner' },
         { schema: 'holidaycalendar', table: 'holidays', app: 'Holiday Planner' },
         { schema: 'holidaycalendar', table: 'bank_holidays', app: 'Holiday Planner' },
+        // Holiday Calendar: packing screen (itinerary + packing lists), same
+        // app tile as above - order mirrors pack.js's own TABLE_ORDER.
+        { schema: 'packing_list', table: 'travellers', app: 'Holiday Planner' },
+        { schema: 'packing_list', table: 'trip_meta', app: 'Holiday Planner' },
+        { schema: 'packing_list', table: 'trip_days', app: 'Holiday Planner' },
+        { schema: 'packing_list', table: 'standard_items', app: 'Holiday Planner' },
+        { schema: 'packing_list', table: 'item_favourites', app: 'Holiday Planner' },
+        { schema: 'packing_list', table: 'packing_items', app: 'Holiday Planner' },
         // Finances
         { schema: 'finance_app', table: 'households', app: 'Finances' },
         { schema: 'finance_app', table: 'household_members', app: 'Finances' },
