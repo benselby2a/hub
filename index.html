@@ -135,11 +135,15 @@
       .top-bar {
         position: fixed;
         top: 0;
+        left: 0;
         right: 0;
         display: none;
         align-items: center;
+        justify-content: flex-end;
         gap: 0.5rem;
         padding: 6px 0.75rem;
+        background: var(--bg-bar);
+        border-bottom: 1px solid var(--border-bar);
         z-index: 100;
       }
 
@@ -148,8 +152,8 @@
       }
 
       .top-bar-user {
-        font-size: 0.6rem;
-        color: var(--text-muted);
+        font-size: 0.7rem;
+        color: var(--text);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
