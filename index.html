@@ -607,9 +607,34 @@
       els.hubRefreshBtn.addEventListener('click', hardReload);
 
       // ── Theme ──────────────────────────────────
-      const savedTheme = localStorage.getItem('hub-theme');
-      if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
-      updateToggleIcon();
+      // Defaults to the OS/browser preference; a manual toggle overrides it
+      // for 24 hours, after which it falls back to following the system again.
+      const THEME_OVERRIDE_MS = 24 * 60 * 60 * 1000;
+      const systemPrefersLight = window.matchMedia('(prefers-color-scheme: light)');
+
+      function storedOverrideTheme() {
+        const value = localStorage.getItem('hub-theme');
+        const at = Number(localStorage.getItem('hub-theme-at'));
+        if (!value || !at || Date.now() - at >= THEME_OVERRIDE_MS) return null;
+        return value;
+      }
+
+      function systemTheme() {
+        return systemPrefersLight.matches ? 'light' : 'dark';
+      }
+
+      function applyTheme(theme) {
+        if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+        else document.documentElement.removeAttribute('data-theme');
+        updateToggleIcon();
+        sendThemeToFrame();
+      }
+
+      applyTheme(storedOverrideTheme() || systemTheme());
+
+      systemPrefersLight.addEventListener('change', () => {
+        if (!storedOverrideTheme()) applyTheme(systemTheme());
+      });
 
       els.toggle.addEventListener('click', toggleTheme);
 
@@ -624,13 +649,10 @@
       }
 
       function toggleTheme() {
-        const current = document.documentElement.getAttribute('data-theme');
-        const next = current === 'light' ? 'dark' : 'light';
-        if (next === 'dark') document.documentElement.removeAttribute('data-theme');
-        else document.documentElement.setAttribute('data-theme', next);
+        const next = getTheme() === 'light' ? 'dark' : 'light';
         localStorage.setItem('hub-theme', next);
-        updateToggleIcon();
-        sendThemeToFrame();
+        localStorage.setItem('hub-theme-at', String(Date.now()));
+        applyTheme(next);
       }
 
       if (els.appToggle) els.appToggle.addEventListener('click', toggleTheme);
